@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ShieldAlert, RefreshCw, Users, Clock, Pencil, X, Settings, KeyRound, BookOpen } from "lucide-react";
+import { ShieldAlert, RefreshCw, Users, Clock, Pencil, X, Settings, KeyRound, BookOpen, Radio } from "lucide-react";
 import { format } from "date-fns";
 import { Navbar } from "@/components/Navbar";
 import { GradientBackground } from "@/components/GradientBackground";
+import { RFIDManagement } from "@/components/admin/RFIDManagement";
 import type { SessionPayload } from "@/utils/session";
 
 type Option = { id: string; name: string };
@@ -62,7 +63,7 @@ export default function AdminPage() {
   const [positions, setPositions] = useState<Option[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'tasks' | 'calendar'>('users');
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'tasks' | 'calendar' | 'rfid'>('users');
   const [editingUser, setEditingUser] = useState<Member | null>(null);
   const [session, setSession] = useState<SessionPayload | null>(null);
 
@@ -354,6 +355,15 @@ export default function AdminPage() {
           <Clock className="w-4 h-4" />
           Calendar
         </button>
+        <button
+          onClick={() => setActiveTab('rfid')}
+          className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-colors ${
+            activeTab === 'rfid' ? 'bg-accent text-[color:var(--color-on-accent)]' : 'bg-white/5 text-muted hover:text-foreground hover:bg-white/10'
+          }`}
+        >
+          <Radio className="w-4 h-4" />
+          RFID & Door
+        </button>
       </div>
 
       <div className="flex gap-3">
@@ -404,6 +414,17 @@ export default function AdminPage() {
       )}
 
       <main className="flex-1 overflow-auto">
+        {activeTab === 'rfid' ? (
+          <motion.div
+            key="rfid"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", bounce: 0, duration: 0.35 }}
+            className="w-full"
+          >
+            <RFIDManagement users={users.map((u) => ({ id: u.id, name: u.name, pnr_number: u.pnr_number, email: u.email }))} />
+          </motion.div>
+        ) : (
         <motion.div
           key={activeTab}
           initial={{ opacity: 0, y: 10 }}
@@ -643,6 +664,7 @@ export default function AdminPage() {
             )}
           </div>
         </motion.div>
+        )}
       </main>
 
       {editingUser && (
