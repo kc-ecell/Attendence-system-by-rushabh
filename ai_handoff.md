@@ -67,15 +67,15 @@ All endpoints are protected by `requireAdmin()`:
 
 ### Completed
 - [x] Codebase research and architectural design approved.
-- [x] Full database migration SQL script created.
+- [x] Full database migration SQL script created and executed in Supabase.
 - [x] Admin RFID API routes implemented and gated with `requireAdmin()`.
 - [x] Next.js native hardware endpoint `/api/device-api` created.
 - [x] Cosmic × Vanilla Admin UI tab created with live Realtime subscription.
 - [x] Full Next.js production build (`npm run build`) passed with zero errors.
+- [x] Firmware secrets updated to point to `https://logs.kcecell.org/api/device-api`.
 
 ### Pending User Actions
-- [ ] Run `supabase/migrations/002_rfid_integration.sql` in Supabase SQL Editor.
-- [ ] Update `secrets.h` in ESP32 firmware with `https://logs.kcecell.org/api/device-api`.
+- [ ] Run ESP32 device registration SQL in Supabase SQL Editor.
 - [ ] Push git commits to live production repository (`git push origin main`).
 
 ---
