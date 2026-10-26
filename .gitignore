@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# hardware & platformio
+.pio/
+.vscode/.browse.c_cpp.db*
+**/secrets.h
