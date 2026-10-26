@@ -71,7 +71,8 @@ All endpoints are protected by `requireAdmin()`:
 - [x] Admin RFID API routes implemented and gated with `requireAdmin()`.
 - [x] Next.js native hardware endpoint `/api/device-api` created.
 - [x] Cosmic × Vanilla Admin UI tab created with live Realtime subscription.
-- [x] Full Next.js production build (`npm run build`) passed with zero errors.
+- [x] Hardware files unified into `hardware/` (monorepo structure) with PlatformIO configs and documentation.
+- [x] Full Next.js production build (`npm run build`) passed with zero errors after hardware consolidation.
 - [x] Firmware secrets updated to point to `https://logs.kcecell.org/api/device-api`.
 
 ### Pending User Actions
