@@ -4,6 +4,9 @@
 -- ==============================================================================
 
 -- 1. Doors (1 records)
+-- Remove any placeholder door with code 'main-door' so the real historical door ID can be inserted cleanly
+DELETE FROM public.doors WHERE code = 'main-door' AND id != '3ab2da1c-4192-453a-a8ce-558a9b0385dc';
+
 INSERT INTO public.doors (id, name, code, enabled, unlock_window_ms, held_open_alarm_ms, override_mode, override_unlock_window_ms, override_expires_at)
 VALUES ('3ab2da1c-4192-453a-a8ce-558a9b0385dc', 'Main Door', 'main-door', true, 5000, 30000, false, 60000, NULL)
 ON CONFLICT (id) DO UPDATE SET
