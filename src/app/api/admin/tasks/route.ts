@@ -20,6 +20,7 @@ export async function GET() {
         assignee:members!assignee_id ( id, name, pnr_number )
       `)
       .is('project_id', null)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -120,7 +121,11 @@ export async function DELETE(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from('tasks').delete().eq('id', task_id);
+    // Soft-delete to bin
+    const { error } = await supabase
+      .from('tasks')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', task_id);
 
     if (error) {
       return NextResponse.json({ error: 'Failed to delete task' }, { status: 500 });

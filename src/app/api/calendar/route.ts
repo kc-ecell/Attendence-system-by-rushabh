@@ -4,10 +4,11 @@ import { getSupabaseAdmin } from '@/utils/supabase';
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
-    // Anyone can view the calendar events
+    // Anyone can view the calendar events (active only)
     const { data, error } = await supabase
       .from('calendar_events')
       .select('id, title, event_date')
+      .is('deleted_at', null)
       .order('event_date', { ascending: true });
 
     if (error) {

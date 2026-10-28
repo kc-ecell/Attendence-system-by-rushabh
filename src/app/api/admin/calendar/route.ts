@@ -49,9 +49,10 @@ export async function DELETE(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
+    // Soft-delete to bin
     const { error } = await supabase
       .from('calendar_events')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', event_id);
 
     if (error) {
