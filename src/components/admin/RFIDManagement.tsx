@@ -120,6 +120,7 @@ export function RFIDManagement({ users = [] }: RFIDManagementProps) {
   const [formMemberId, setFormMemberId] = useState("");
   const [formNotes, setFormNotes] = useState("");
   const [submittingForm, setSubmittingForm] = useState(false);
+  const [modalPerson, setModalPerson] = useState<PersonRow | null>(null);
 
   const showNotice = useCallback((text: string, error = false) => {
     setNotification({ text, error });
@@ -242,7 +243,11 @@ export function RFIDManagement({ users = [] }: RFIDManagementProps) {
 
   // Trigger Remote Unlock
   const handleRemoteUnlock = async () => {
-    if (!primaryDoor || unlocking || unlockCooldown > 0) return;
+    if (!primaryDoor) {
+      showNotice("No door found. Please ensure a door exists in the database.", true);
+      return;
+    }
+    if (unlocking || unlockCooldown > 0) return;
     setUnlocking(true);
     try {
       const res = await fetch("/api/admin/rfid/doors/unlock", {
@@ -273,7 +278,10 @@ export function RFIDManagement({ users = [] }: RFIDManagementProps) {
 
   // Toggle Any-Card Mode Override
   const handleToggleOverride = async () => {
-    if (!primaryDoor) return;
+    if (!primaryDoor) {
+      showNotice("No door found. Please ensure a door exists in the database.", true);
+      return;
+    }
     try {
       const nextMode = !isOverrideActive;
       const res = await fetch("/api/admin/rfid/doors/override", {
@@ -297,7 +305,10 @@ export function RFIDManagement({ users = [] }: RFIDManagementProps) {
 
   // Start Card Enrollment
   const handleEnrollCard = async (personId: string) => {
-    if (!primaryDoor) return;
+    if (!primaryDoor) {
+      showNotice("No door found. Please ensure an active door exists in the database.", true);
+      return;
+    }
     try {
       const res = await fetch("/api/admin/rfid/enroll", {
         method: "POST",
@@ -308,6 +319,7 @@ export function RFIDManagement({ users = [] }: RFIDManagementProps) {
       if (!res.ok) throw new Error(data.error || "Enrollment initiation failed");
 
       showNotice("Enrollment started. Tap your admin supervisor badge at the door first.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
       loadOverview();
     } catch (err: unknown) {
       showNotice(err instanceof Error ? err.message : "Enrollment failed", true);
@@ -355,11 +367,26 @@ export function RFIDManagement({ users = [] }: RFIDManagementProps) {
   // Delete Person
   const handleDeletePerson = async (person: PersonRow) => {
     if (person.access_enabled) {
-      showNotice("Revoke access before deleting this person.", true);
-      return;
-    }
-    if (!confirm(`Are you sure you want to delete ${person.full_name} and unbind their badge?`)) {
-      return;
+      if (
+        !confirm(
+          `"${person.full_name}" currently has active door access. Would you like to revoke their access and delete them?`
+        )
+      ) {
+        return;
+      }
+      try {
+        await fetch(`/api/admin/rfid/people/${person.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_enabled: false }),
+        });
+      } catch {
+        // continue
+      }
+    } else {
+      if (!confirm(`Are you sure you want to delete ${person.full_name} and unbind their badge?`)) {
+        return;
+      }
     }
 
     try {
@@ -371,6 +398,7 @@ export function RFIDManagement({ users = [] }: RFIDManagementProps) {
 
       showNotice(`${person.full_name} deleted successfully.`);
       setPeople((prev) => prev.filter((p) => p.id !== person.id));
+      if (modalPerson?.id === person.id) setModalPerson(null);
       if (editingId === person.id) resetForm();
       loadOverview();
     } catch (err: unknown) {
@@ -378,21 +406,34 @@ export function RFIDManagement({ users = [] }: RFIDManagementProps) {
     }
   };
 
-  // Populate Edit Form
+  // Open Edit Modal directly when clicking edit
   const handleEditClick = (person: PersonRow) => {
-    setIsEditing(true);
-    setEditingId(person.id);
-    setFormName(person.full_name);
-    setFormClass(person.class_name || "");
-    setFormDivision(person.division || "");
-    setFormYear(person.academic_year || "");
-    setFormRole(person.role || "member");
-    setFormUid(person.card?.uid || "");
-    setFormMemberId(person.member_id || "");
-    setFormNotes(person.notes || "");
+    setModalPerson(person);
+  };
 
-    // Scroll smoothly to form
-    window.scrollTo({ top: 120, behavior: "smooth" });
+  // Save changes from Edit Person Modal
+  const handleSavePersonModal = async (payload: {
+    full_name: string;
+    class_name: string;
+    division: string;
+    academic_year: string;
+    role: "member" | "admin";
+    uid: string;
+    member_id: string | null;
+    notes: string;
+  }) => {
+    if (!modalPerson) return;
+    const res = await fetch(`/api/admin/rfid/people/${modalPerson.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to update person");
+
+    showNotice(`Updated details for ${payload.full_name}.`);
+    setModalPerson(null);
+    await Promise.all([loadPeople(), loadOverview()]);
   };
 
   const resetForm = () => {
@@ -1081,6 +1122,225 @@ export function RFIDManagement({ users = [] }: RFIDManagementProps) {
           </div>
         </div>
       </div>
+
+      {/* Edit Person Modal */}
+      {modalPerson && (
+        <EditPersonModal
+          person={modalPerson}
+          users={users}
+          onClose={() => setModalPerson(null)}
+          onSave={handleSavePersonModal}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditPersonModal({
+  person,
+  users,
+  onClose,
+  onSave,
+}: {
+  person: PersonRow;
+  users: MemberOption[];
+  onClose: () => void;
+  onSave: (payload: {
+    full_name: string;
+    class_name: string;
+    division: string;
+    academic_year: string;
+    role: "member" | "admin";
+    uid: string;
+    member_id: string | null;
+    notes: string;
+  }) => Promise<void>;
+}) {
+  const [fullName, setFullName] = useState(person.full_name);
+  const [className, setClassName] = useState(person.class_name || "");
+  const [division, setDivision] = useState(person.division || "");
+  const [academicYear, setAcademicYear] = useState(person.academic_year || "");
+  const [role, setRole] = useState<"member" | "admin">(person.role || "member");
+  const [uid, setUid] = useState(person.card?.uid || "");
+  const [memberId, setMemberId] = useState(person.member_id || "");
+  const [notes, setNotes] = useState(person.notes || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim()) {
+      setError("Full Name is required.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await onSave({
+        full_name: fullName.trim(),
+        class_name: className.trim(),
+        division: division.trim(),
+        academic_year: academicYear.trim(),
+        role,
+        uid: uid.trim(),
+        member_id: memberId || null,
+        notes: notes.trim(),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update person.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
+        className="relative w-full max-w-lg glass-card rounded-2xl overflow-hidden z-10 max-h-[90vh] flex flex-col"
+      >
+        <div className="p-6 border-b border-[color:var(--color-border)] flex justify-between items-center">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Pencil className="w-4 h-4 text-accent" />
+            Edit Badge Holder
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+            <X className="w-5 h-5 text-muted" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              Full Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="field w-full px-3 py-2 rounded-lg text-sm"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">Class</label>
+              <input
+                type="text"
+                value={className}
+                onChange={(e) => setClassName(e.target.value)}
+                placeholder="e.g. CS / IT"
+                className="field w-full px-3 py-2 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">Division</label>
+              <input
+                type="text"
+                value={division}
+                onChange={(e) => setDivision(e.target.value)}
+                placeholder="e.g. A / B / C"
+                className="field w-full px-3 py-2 rounded-lg text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">Academic Year</label>
+              <input
+                type="text"
+                value={academicYear}
+                onChange={(e) => setAcademicYear(e.target.value)}
+                placeholder="e.g. 2026-27"
+                className="field w-full px-3 py-2 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">Door Role</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as "member" | "admin")}
+                className="field w-full px-3 py-2 rounded-lg text-sm"
+              >
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              Link to Attendance Member
+            </label>
+            <select
+              value={memberId}
+              onChange={(e) => setMemberId(e.target.value)}
+              className="field w-full px-3 py-2 rounded-lg text-sm"
+            >
+              <option value="">None (Standalone Badge)</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.pnr_number})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              Card UID (Hexadecimal)
+            </label>
+            <input
+              type="text"
+              value={uid}
+              onChange={(e) => setUid(e.target.value.toUpperCase())}
+              placeholder="e.g. 04A1B2C3D4"
+              className="field w-full px-3 py-2 rounded-lg text-sm font-mono tracking-wider"
+            />
+            <p className="text-[11px] text-faint mt-1">
+              Leave blank to unassign badge, or tap card on reader to enroll automatically.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">Notes</label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Additional information..."
+              className="field w-full px-3 py-2 rounded-lg text-sm resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-secondary flex-1 py-2.5 px-4 rounded-xl text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-primary flex-1 py-2.5 px-4 rounded-xl text-sm disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
     </div>
   );
 }
